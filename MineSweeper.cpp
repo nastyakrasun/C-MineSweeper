@@ -1,18 +1,38 @@
 // WndPrMinesweeperSelf.cpp : Определяет точку входа для приложения.
+//
 
 #include "framework.h"
 #include "WndPrMinesweeperSelf.h"
 #include <windows.h>
 #include <stdio.h>
+#include <time.h>
+#include <string.h>
 
 #define MAX_LOADSTRING 100
 #define N 10//количество строк
 #define M 10//количество столбцов
+#define MAX_NUM_RECORDS 10
+
+struct Record {
+    char name[20];
+    int mineCells;
+    int steps;
+    unsigned int year;
+    unsigned int month;
+    unsigned int day;
+    unsigned int hour;
+    unsigned int minute;
+    unsigned int second;
+};
 
 // Глобальные переменные:
 HINSTANCE hInst;                                // текущий экземпляр
 WCHAR szTitle[MAX_LOADSTRING];                  // Текст строки заголовка
 WCHAR szWindowClass[MAX_LOADSTRING];            // имя класса главного окна
+Record records[MAX_NUM_RECORDS];
+int numRecords = 0;//считаем рекорды
+int showMode = 1;
+
 
 // Отправить объявления функций, включенных в этот модуль кода:
 ATOM                MyRegisterClass(HINSTANCE hInstance);
@@ -37,6 +57,8 @@ char filenameStatus[4][80] = { "status.txt", //сюда сохраняем со�
                                "level2.txt",
                                "level3.txt" };
 
+char filenameRecords[80] = "records.txt";
+
 //размер одной ячейки
 int sizeX = 32;
 int sizeY = 32;
@@ -45,6 +67,8 @@ int steps = 0;
 int mine = 0;
 int level;
 int mineCells;
+
+//переходим к отрисовке - DrawField()
 
 int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
                      _In_opt_ HINSTANCE hPrevInstance,
@@ -124,6 +148,7 @@ int CountMines() {
     }
     return mineCells;
 }
+
 
 //2 создадим функию для отрисовки поля игрового
 void DrawField(HDC hdc) {
@@ -254,6 +279,7 @@ bool CheckVictory() {//условие победы: открыты все кле
     return (openedCells == (totalCells - mineCells));
 }
 
+
 //4 функция открытия ячеек
 void OpenCell(int mouseX, int mouseY) {
     //определяем, какая ячейка была нажата
@@ -379,6 +405,150 @@ void saveStatus()
     MessageBoxA(0, "Файл успешно записан", "Всё получилось", MB_OK);
 }
 
+// 14.01.24 рекорды
+void addRecord(char name[])
+{
+    //27.12.24 запись в одну табличку с рекордами
+    if (numRecords >= MAX_NUM_RECORDS) {
+        numRecords = MAX_NUM_RECORDS - 1;
+    }
+    strcpy_s(records[numRecords].name, name); //скопировали имя
+    records[numRecords].mineCells = mineCells;
+    records[numRecords].steps = steps;
+    //для хранения времени
+    SYSTEMTIME st;
+    GetLocalTime(&st);
+    //st. //пробелом смотрим поля функции st
+    records[numRecords].year = st.wYear;//записываем время до секунды
+    records[numRecords].month = st.wMonth;
+    records[numRecords].day = st.wDay;
+    records[numRecords].hour = st.wHour;
+    records[numRecords].minute = st.wMinute;
+    records[numRecords].second = st.wSecond;
+    numRecords++;//отсортируем таблицу по макс рекордам сверху - CompareRecords
+}
+//cоздадим функцию для отображения таблицы - DrawRecords
+void drawRecords(HDC hdc) {
+    HFONT hFont = CreateFontA(16, 0, 0, 0, 0, 0, 0, 0, DEFAULT_CHARSET, 0, 0, 0, 0, "Courier New");
+    SelectObject(hdc, hFont);
+    SetTextColor(hdc, RGB(0, 64, 64));
+    char str1[] = "| №  | Дата       | Время    | Имя                  | Мин всего | Ходов |";
+    TextOutA(hdc, 10, 50, str1, strlen(str1));
+
+    for (int i = 0; i < numRecords; i++) {
+        char str2[100];
+        sprintf_s(str2, "| %2d | %02d.%02d.%4d | %02d:%02d:%02d | %-20s | %9d | %5d |", //%2d  - целое число длиной 2 символа, %02d - заполняет оставшиеся символы нулями %-20s - 20 символов с выравниванием по левому краю
+            i + 1, records[i].day, records[i].month, records[i].year,
+            records[i].hour, records[i].minute, records[i].second,
+            records[i].name, records[i].mineCells, records[i].steps
+        );
+        TextOutA(hdc, 10, 50 + (i + 1) * 24, str2, strlen(str2));
+    }
+}//showmode режим отображения бинарный 0 - ничего 1 - игровое поле
+
+int CompareRecords(int index1, int index2)//передаем порядковые номера рекордов вв функцию
+{
+    if (records[index1].mineCells < records[index2].mineCells)//если у первого меньше золота
+    {
+        return -1;
+    }
+    if (records[index1].mineCells > records[index2].mineCells)
+    {
+        return 1;
+    }
+    if (records[index1].steps > records[index2].steps)//если золота одинаково - сравниваем шаги
+    {
+        return -1;
+    }
+    if (records[index1].steps < records[index2].steps)
+    {
+        return 1;
+    }
+    return 0;
+}
+
+//добавление рекорда с сортировкой
+void insertRecord(char name[])
+{
+    strcpy_s(records[numRecords].name, name); //скопировали имя
+    records[numRecords].mineCells = mineCells;
+    records[numRecords].steps = steps;
+    //для хранения времени
+    SYSTEMTIME st;
+    GetLocalTime(&st);
+    //st. //пробелом смотрим поля функции st
+    records[numRecords].year = st.wYear;//записываем время до секунды
+    records[numRecords].month = st.wMonth;
+    records[numRecords].day = st.wDay;
+    records[numRecords].hour = st.wHour;
+    records[numRecords].minute = st.wMinute;
+    records[numRecords].second = st.wSecond;
+    //если результат хороштй - двигаем вверх
+    int i = numRecords;
+    while (i > 0) {
+        if (CompareRecords(i - 1, i) < 0) {
+            Record temp = records[i];
+            records[i] = records[i - 1];
+            records[i - 1] = temp;
+            i--;
+        }
+    }
+    if (numRecords < MAX_NUM_RECORDS) {
+        numRecords++;
+    }
+}
+
+void saveRecords() {
+    FILE* f;
+    fopen_s(&f, filenameRecords, "wt");
+    if (f == NULL) {
+        MessageBoxA(0, "Не удалось сохранить рекорды.", "Ошибка", MB_OK);
+        return; // проверка на успешное открытие файла
+    }
+    fprintf(f, "%d", numRecords);
+    for (int i = 0; i < numRecords; i++) {
+        fprintf(f, "\n%s %d %d %d %d %d %d %d %d\n",
+            records[i].name,
+            records[i].mineCells,
+            records[i].steps,
+            records[i].year,
+            records[i].month,
+            records[i].day,
+            records[i].hour,
+            records[i].minute,
+            records[i].second);
+    }
+    fclose(f);
+}
+
+void loadRecords() {
+    FILE* f;
+    if (fopen_s(&f, filenameRecords, "rt") != 0) {
+        MessageBoxA(0, "Не удалось загрузить рекорды.", "Ошибка", MB_OK);
+        return; // проверка на успешное открытие файла
+    }
+    fscanf_s(f, "%d\n", &numRecords);
+    for (int i = 0; i < numRecords; i++) {
+        fgets(records[i].name, 80, f);
+        for (int j = 0; j < strlen(records[i].name); j++) {
+            if (records[i].name[j] == '\n') {
+                records[i].name[j] = 0;
+            }
+        }
+        fscanf_s(f, "%d%d%d%d%d%d%d%d\n",
+            &records[i].mineCells,
+            &records[i].steps,
+            &records[i].year,
+            &records[i].month,
+            &records[i].day,
+            &records[i].hour,
+            &records[i].minute,
+            &records[i].second);
+    }
+    fclose(f);
+}
+
+
 //
 //   ФУНКЦИЯ: InitInstance(HINSTANCE, int)
 //
@@ -394,7 +564,8 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
    hInst = hInstance; // Сохранить маркер экземпляра в глобальной переменной
 
    HWND hWnd = CreateWindowW(szWindowClass, szTitle, WS_OVERLAPPEDWINDOW,
-      CW_USEDEFAULT, 0, 336, 500, nullptr, nullptr, hInstance, nullptr);
+      //CW_USEDEFAULT, 0, 336, 500, nullptr, nullptr, hInstance, nullptr);
+      CW_USEDEFAULT, 0, CW_USEDEFAULT, 0, nullptr, nullptr, hInstance, nullptr);
 
    if (!hWnd)
    {
@@ -421,6 +592,21 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
     switch (message)
     {
+        static HWND hEdit1;
+        static HWND hAddBtn;
+
+    case WM_CREATE:
+        hInst = ((LPCREATESTRUCT)lParam)->hInstance;
+        hEdit1 = CreateWindowA("edit", "Noname", WS_CHILD | WS_VISIBLE
+            | WS_BORDER | ES_LEFT, 650, 50, 160, 20, hWnd, 0, hInst, NULL);
+        ShowWindow(hEdit1, SW_SHOWNORMAL);
+        hAddBtn = CreateWindowA("button", "Запомнить", WS_CHILD | WS_VISIBLE |
+            WS_BORDER, 650, 100, 160, 24, hWnd, 0, hInst, NULL);
+        ShowWindow(hAddBtn, SW_SHOWNORMAL);
+        srand(time(0));
+        SetTimer(hWnd, 1, 100, NULL);
+        loadRecords();
+        break;
     case WM_LBUTTONDOWN: {
         POINT pt;//получаем координаты курсора
         GetCursorPos(&pt);
@@ -460,10 +646,22 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
                            loadLevel(3);
                            InvalidateRect(hWnd, NULL, true);
                        }
+                       if (wParam == VK_TAB) { // переключение между игровым полем и рекордами
+                           showMode = 1 - showMode; // переключаем между 1 и 0
+                           InvalidateRect(hWnd, NULL, true);
+                       }
                        break;
     }
     case WM_COMMAND:
         {
+        if (lParam == (LPARAM)hAddBtn)
+        {
+            char name[80];
+            GetWindowTextA(hEdit1, name, 80);
+            MessageBoxA(hWnd, "Рекорд добавлен", "Добавление рекорда", MB_OK);
+            insertRecord(name);
+            SetFocus(hWnd);
+        }
             int wmId = LOWORD(wParam);
             // Разобрать выбор в меню:
             switch (wmId)
@@ -482,14 +680,21 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
     case WM_PAINT:
         {
             PAINTSTRUCT ps;
+
             HDC hdc = BeginPaint(hWnd, &ps);
+            if (showMode == 1) {
             DrawField(hdc);
             DrawCell(hdc);
+            }
+            else {
+                drawRecords(hdc);
+            }
             // TODO: Добавьте сюда любой код прорисовки, использующий HDC...
             EndPaint(hWnd, &ps);
         }
         break;
     case WM_DESTROY:
+        saveRecords();
         PostQuitMessage(0);
         break;
     default:
