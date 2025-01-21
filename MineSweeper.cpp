@@ -1,12 +1,22 @@
 // WndPrMinesweeperSelf.cpp : Определяет точку входа для приложения.
-//
 
 #include "framework.h"
 #include "WndPrMinesweeperSelf.h"
 #include <windows.h>
+// для отображения шифрования
+#include <windowsx.h>
 #include <stdio.h>
 #include <time.h>
 #include <string.h>
+//файлы заголовков среды выполнения Си
+#include <stdlib.h>
+#include <malloc.h>
+#include <memory.h>
+#include <tchar.h>
+
+//вставить в правильное место
+#define _CRT_SECURE_NO_WARNINGS
+#define WIN32_LEAN_AND_MEAN //исключить редко используемые функции
 
 #define MAX_LOADSTRING 100
 #define N 10//количество строк
@@ -15,7 +25,7 @@
 
 struct Record {
     char name[20];
-    int mineCells;
+    int minedCells;
     int steps;
     unsigned int year;
     unsigned int month;
@@ -29,10 +39,10 @@ struct Record {
 HINSTANCE hInst;                                // текущий экземпляр
 WCHAR szTitle[MAX_LOADSTRING];                  // Текст строки заголовка
 WCHAR szWindowClass[MAX_LOADSTRING];            // имя класса главного окна
-Record records[MAX_NUM_RECORDS];
+
+Record records[MAX_NUM_RECORDS + 1];
 int numRecords = 0;//считаем рекорды
 int showMode = 1;
-
 
 // Отправить объявления функций, включенных в этот модуль кода:
 ATOM                MyRegisterClass(HINSTANCE hInstance);
@@ -40,8 +50,9 @@ BOOL                InitInstance(HINSTANCE, int);
 LRESULT CALLBACK    WndProc(HWND, UINT, WPARAM, LPARAM);
 INT_PTR CALLBACK    About(HWND, UINT, WPARAM, LPARAM);
 
+// массив игрового поля
 int a[N][M] = {
-    {0,1,1,1,0, 0,0,0,0,0},//коды ячеек: 0 - свободна, 9 - мина, 1, 2, 3...<9 - количество мин рядом
+    {0,1,1,1,0, 0,0,0,0,0},//коды ячеек: 0 - свободна, 9 - мина, 1, 2, 3...<9 - количество мин рядом, 10 - помеченная на мину ячейка
     {0,1,9,1,0, 0,0,0,0,0},
     {0,1,1,1,0, 0,0,0,0,0},
     {0,0,0,0,1, 1,1,0,0,0},
@@ -52,6 +63,9 @@ int a[N][M] = {
     {0,0,0,0,0, 0,1,1,1,0},
     {0,0,0,0,0, 0,0,0,0,0},
 };
+
+int InitialArray[N][M]; // массив исходных значений чтобы получать оттуда коды ячеек, с которых сняли пометку мины TickCell()
+
 char filenameStatus[4][80] = { "status.txt", //сюда сохраняем состояние
                                "level1.txt", //отсюда берем уровни
                                "level2.txt",
@@ -62,11 +76,12 @@ char filenameRecords[80] = "records.txt";
 //размер одной ячейки
 int sizeX = 32;
 int sizeY = 32;
+
 //счетчики шагов и мин
 int steps = 0;
-int mine = 0;
+int minedCells;
+//int tickedCells; //счетчик помеченных ячеек TickCell()
 int level;
-int mineCells;
 
 //переходим к отрисовке - DrawField()
 
@@ -121,38 +136,38 @@ ATOM MyRegisterClass(HINSTANCE hInstance)
 
     wcex.cbSize = sizeof(WNDCLASSEX);
 
-    wcex.style          = CS_HREDRAW | CS_VREDRAW;
-    wcex.lpfnWndProc    = WndProc;
-    wcex.cbClsExtra     = 0;
-    wcex.cbWndExtra     = 0;
-    wcex.hInstance      = hInstance;
-    wcex.hIcon          = LoadIcon(hInstance, MAKEINTRESOURCE(IDI_WNDPRMINESWEEPERSELF));
-    wcex.hCursor        = LoadCursor(nullptr, IDC_ARROW);
-    wcex.hbrBackground  = (HBRUSH)(COLOR_WINDOW+1);
-    wcex.lpszMenuName   = MAKEINTRESOURCEW(IDC_WNDPRMINESWEEPERSELF);
-    wcex.lpszClassName  = szWindowClass;
-    wcex.hIconSm        = LoadIcon(wcex.hInstance, MAKEINTRESOURCE(IDI_SMALL));
+    wcex.style = CS_HREDRAW | CS_VREDRAW;
+    wcex.lpfnWndProc = WndProc;
+    wcex.cbClsExtra = 0;
+    wcex.cbWndExtra = 0;
+    wcex.hInstance = hInstance;
+    wcex.hIcon = LoadIcon(hInstance, MAKEINTRESOURCE(IDI_WNDPRMINESWEEPERSELF));
+    wcex.hCursor = LoadCursor(nullptr, IDC_ARROW);
+    wcex.hbrBackground = (HBRUSH)(COLOR_WINDOW + 1);
+    wcex.lpszMenuName = MAKEINTRESOURCEW(IDI_WNDPRMINESWEEPERSELF);
+    wcex.lpszClassName = szWindowClass;
+    wcex.hIconSm = LoadIcon(wcex.hInstance, MAKEINTRESOURCE(IDI_SMALL));
 
     return RegisterClassExW(&wcex);
 }
 
 //функция-cчетчик мин
 int CountMines() {
-    int mineCells = 0;
+    int minedCells = 0;
     for (int i = 0; i < N; i++) {
         for (int j = 0; j < M; j++) {
             if (a[i][j] == 9) { //ячейка содержит мину
-                mineCells++;
+                minedCells++;
             }
         }
     }
-    return mineCells;
+    return minedCells;
 }
 
 
 //2 создадим функию для отрисовки поля игрового
 void DrawField(HDC hdc) {
-    mineCells = CountMines(); //обновление количества мин перед отрисовкой
+    minedCells = CountMines(); //обновление количества мин перед отрисовкой
 
     HBRUSH hField = CreateSolidBrush(RGB(200, 200, 200));
     HFONT hFont = CreateFontA(20, 0, 0, 0, FW_BOLD, 0, 0, 0, DEFAULT_CHARSET, 0, 0, 0, 0, "Courier New");
@@ -169,7 +184,7 @@ void DrawField(HDC hdc) {
     //выведем на экран номер уровня, количество мин и счетчик ходов  
     char str1[] = "Уровень: ";
     char str2[] = "Содержит мин: ";
-    char str3[] = "Сделано ходов: ";
+    char str3[] = "Открыто ячеек: ";
     TextOutA(hdc, 32, sizeY * (N+1), str1, strlen(str1));
     TextOutA(hdc, 32, sizeY * (N + 1) + 20, str2, strlen(str2));
     TextOutA(hdc, 32, sizeY * (N + 1)+40, str3, strlen(str3));
@@ -177,7 +192,7 @@ void DrawField(HDC hdc) {
     char num[3];   
     sprintf_s(num, "%d", level);
     TextOutA(hdc, 220, sizeY * (N + 1), num, strlen(num));
-    sprintf_s(num, "%d", mineCells);//в отл от обычного вывод не в консоль, а в строку (_string), приставка s - безопасный (safe)
+    sprintf_s(num, "%d", minedCells);//в отл от обычного вывод не в консоль, а в строку (_string), приставка s - безопасный (safe)
     TextOutA(hdc, 220, sizeY * (N + 1)+20, num, strlen(num));
     sprintf_s(num, "%d", steps);
     TextOutA(hdc, 220, sizeY * (N + 1)+40, num, strlen(num));
@@ -209,8 +224,8 @@ void DrawCell(HDC hdc) {
                 if (a[i][j] == 10) {   
                     FillRect(hdc, &rect, hCell);
                     Rectangle(hdc, rect.left, rect.top, rect.right, rect.bottom);
-                SetTextColor(hdc, RGB(0, 0, 0));
-                DrawText(hdc, L"1", -1, &rect, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+                    SetTextColor(hdc, RGB(0, 0, 0));
+                    DrawText(hdc, L"1", -1, &rect, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
                               }
                 else if (a[i][j] == 20) { 
                     FillRect(hdc, &rect, hCell);
@@ -239,33 +254,11 @@ void DrawCell(HDC hdc) {
     DeleteObject(hPen);
 }//вызвать функцию DrawCell(hdc); в WM_PAINT
 
-void TickCell(HDC hdc) {
-    HBRUSH hTick = CreateSolidBrush(RGB(255, 0, 0));
-    HFONT hFont = CreateFontA(20, 0, 0, 0, FW_BOLD, 0, 0, 0, DEFAULT_CHARSET, 0, 0, 0, 0, "Courier New");
-    HPEN hPen = CreatePen(PS_SOLID, 2, RGB(100, 100, 100));
-    SelectObject(hdc, hFont);
-    SelectObject(hdc, hPen);
-    for (int i = 0; i < N; i++) {//цикл обходит по строкам
-        for (int j = 0; j < M; j++) {//цикл обходит по элементам строки
-            RECT rect = { j * sizeX,i * sizeY,(j + 1) * sizeX,(i + 1) * sizeY };
-            if (a[i][j] == 900) {
-                    FillRect(hdc, &rect, hTick);
-                    Rectangle(hdc, rect.left, rect.top, rect.right, rect.bottom);
-                    SetTextColor(hdc, RGB(255, 0, 0));
-                    DrawText(hdc, L"*", -1, &rect, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
-                }
-            }
-        }    
-    DeleteObject(hTick);
-    DeleteObject(hFont);
-    DeleteObject(hPen);
-}//вызвать функцию TickCell(hdc); в WM_PAINT
-
 //функция для проверки победы
 bool CheckVictory() {//условие победы: открыты все клетки, кроме мин
     int openedCells = 0;
     int totalCells = N * M;
-    mineCells = CountMines();//отрабатывает функция подсчета количества мин
+    minedCells = CountMines();//отрабатывает функция подсчета количества мин
 
     //подсчитываем открытые клетки
     for (int i = 0; i < N; i++) {
@@ -276,7 +269,50 @@ bool CheckVictory() {//условие победы: открыты все кле
         }
     }
     //проверяем условие победы
-    return (openedCells == (totalCells - mineCells));
+    return (openedCells == (totalCells - minedCells));
+}
+//показ ячеек с минами в случае проигрыша: если ячейка содержит мину (9), обозначаем, что ячейка с миной открыта (90)
+void ShowMines() {
+    for (int i = 0; i < N; i++) {
+        for (int j = 0; j < M; j++) {
+            if (a[i][j] == 9) {
+                a[i][j] *= 10;
+            }
+        }
+    }
+}
+
+// рекурсивное открытие соседних ячеек - до основной функции, тк из основной функции вызывается рекурсивная
+void OpenNeighbours(int i, int j) {
+    // проверка нахождения в границах игрового поля: вне границ не работаем
+    if (i < 0 || i >= N || j < 0 || j >= M) {
+        return;
+    }
+
+    // проверка, была ли ячейка уже открыта: если открыта, не трогаем
+    if (a[i][j] >= 10) {
+        return;
+    }
+
+    // открываем закрытую ячейку (0 -- 100)
+    if (a[i][j] == 0) {
+        a[i][j] = 100;
+        steps++; // увеличиваем счетчик шагов
+
+        // рекурсивно открываем все соседние ячейки
+        OpenNeighbours(i - 1, j); // вверх
+        OpenNeighbours(i + 1, j); // вниз
+        OpenNeighbours(i, j - 1); // влево
+        OpenNeighbours(i, j + 1); // вправо
+        OpenNeighbours(i - 1, j - 1); // вверх-лево
+        OpenNeighbours(i - 1, j + 1); // вверх-право
+        OpenNeighbours(i + 1, j - 1); // вниз-лево
+        OpenNeighbours(i + 1, j + 1); // вниз-право
+    }
+    else if (a[i][j] >= 1 && a[i][j] <= 8) {
+        a[i][j] *= 10; // открываем ячейку с числом
+        steps++; // увеличиваем счетчик шагов
+    }
 }
 
 
@@ -286,20 +322,24 @@ void OpenCell(int mouseX, int mouseY) {
     int i = mouseY / sizeY;//номер строки
     int j = mouseX / sizeX;//номер столбца
 
-    //проверка границ
+    // проверка нахождения в границах игрового поля
     if (i < 0 || i >= N || j < 0 || j >= M) {
-        return;//нажатие вне игрового поля
+        return;
     }
     //если мина
     if (a[i][j] == 9) {
         a[i][j] *= 10;
         //игра закончена, поражение
         MessageBox(NULL, L"Поражение\nВы открыли ячейку с миной", L"Игра окончена", MB_OK);
+        //открываем все мины
+        ShowMines();
     }
     //если ячейка свободна
     else if (a[i][j] == 0) {
-        a[i][j] = 100;//перерисовываем ячейку
-        steps++;//увеличиваем счетчик шагов
+        //a[i][j] = 100;//перерисовываем ячейку
+        //steps++;//увеличиваем счетчик шагов
+        //рекуррсивно открываем соседние ячейки
+        OpenNeighbours(i, j);
     }
     //если ячейка содержит число
     else if (a[i][j] >= 1 && a[i][j] <= 8) {
@@ -312,21 +352,51 @@ void OpenCell(int mouseX, int mouseY) {
     }
 }
 
-////5 функция метки ячеек
-//void TickCell(int mouseX, int mouseY) {
-//    //определяем, какая ячейка была нажата
-//    int i = mouseY / sizeY;//номер строки
-//    int j = mouseX / sizeX;//номер столбца
-//
-//    //проверка границ
-//    if (i < 0 || i >= N || j < 0 || j >= M) {
-//        return;//нажатие вне игрового поля
-//    }
-//    else  {
-//        a[i][j] = 900;//перерисовываем ячейку
-//        mine++;//увеличиваем счетчик отмеченных мин
-//    }
-//}
+//5 функция метки ячеек
+void TickCell(int mouseX, int mouseY) {
+    //определяем, какая ячейка была нажата
+    int i = mouseY / sizeY;//номер строки
+    int j = mouseX / sizeX;//номер столбца
+
+    //проверка границ
+    if (i < 0 || i >= N || j < 0 || j >= M) {
+        return;
+    }
+    
+    //если ячейка помечена (900), возвращаем её в исходное состояние
+    if (a[i][j] == 900) {
+        //восстанавливаем исходное значение из массива InitialArray
+        a[i][j] = InitialArray[i][j];
+        //tickedCells--; //уменьшаем счетчик отмеченных мин
+    }
+    else if (a[i][j] >= 1 && a[i][j] <= 9) {
+        // если ячейка не помечена, помечаем её
+        a[i][j] = 900; //перерисовываем ячейку
+        //tickedCells++; //увеличиваем счетчик отмеченных мин
+    }
+}//вызвать функцию TickCell(hdc); в WM_RBUTTONDOWN
+
+void DrawTickedCell(HDC hdc) {
+    HBRUSH hTick = CreateSolidBrush(RGB(255, 0, 0));
+    HFONT hFont = CreateFontA(20, 0, 0, 0, FW_BOLD, 0, 0, 0, DEFAULT_CHARSET, 0, 0, 0, 0, "Courier New");
+    HPEN hPen = CreatePen(PS_SOLID, 2, RGB(100, 100, 100));
+    SelectObject(hdc, hFont);
+    SelectObject(hdc, hPen);
+    for (int i = 0; i < N; i++) {//цикл обходит по строкам
+        for (int j = 0; j < M; j++) {//цикл обходит по элементам строки
+            RECT rect = { j * sizeX,i * sizeY,(j + 1) * sizeX,(i + 1) * sizeY };
+            if (a[i][j] == 900) {
+                FillRect(hdc, &rect, hTick);
+                Rectangle(hdc, rect.left, rect.top, rect.right, rect.bottom);
+                SetTextColor(hdc, RGB(255, 0, 0));
+                DrawText(hdc, L"*", -1, &rect, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+            }
+        }
+    }
+    DeleteObject(hTick);
+    DeleteObject(hFont);
+    DeleteObject(hPen);
+}//вызвать функцию DrawTickedCell(hdc); в WM_PAINT
 
 void loadStatus()
 {
@@ -336,9 +406,8 @@ void loadStatus()
         MessageBoxA(0, "Не удалось загрузить статус игры. Файл не найден.", "Ошибка", MB_OK);
         return; //проверка на успешное открытие файла
     }
-
     //восстанавливаем количество шагов и мин
-    fscanf_s(f, "%d %d\n", &steps, &mine);
+    fscanf_s(f, "%d %d\n", &steps, &minedCells);
     int i = 0;
     while (i < N) {
         int j = 0;
@@ -353,10 +422,6 @@ void loadStatus()
 
 void loadLevel(int level)
 {
-    if (level < 1 || level > 3) {
-        MessageBoxA(0, "Некорректный уровень. Пожалуйста, выберите уровень от 1 до 3.", "Ошибка", MB_OK);
-        return; //проверка на корректность уровня
-    }
     FILE* f;
     if (fopen_s(&f, filenameStatus[level], "rt") != 0) {
         MessageBoxA(0, "Не удалось загрузить уровень игры. Файл не найден.", "Ошибка", MB_OK);
@@ -371,6 +436,7 @@ void loadLevel(int level)
         int j = 0;
         while (j < M) {
             fscanf_s(f, "%d", &a[i][j]);
+            InitialArray[i][j] = a[i][j]; //записываем массив исходных значений
             j++;
         }
         i++;
@@ -389,7 +455,7 @@ void saveStatus()
     }
 
     //сохраняем количество шагов и мин
-    fprintf(f, "%d %d\n", steps, mine);
+    fprintf(f, "%d %d\n", steps, minedCells);
 
     int i = 0;
     while (i < N) {//пока строка не кончится бежим по элементам строки
@@ -413,7 +479,7 @@ void addRecord(char name[])
         numRecords = MAX_NUM_RECORDS - 1;
     }
     strcpy_s(records[numRecords].name, name); //скопировали имя
-    records[numRecords].mineCells = mineCells;
+    records[numRecords].minedCells = minedCells;
     records[numRecords].steps = steps;
     //для хранения времени
     SYSTEMTIME st;
@@ -427,32 +493,14 @@ void addRecord(char name[])
     records[numRecords].second = st.wSecond;
     numRecords++;//отсортируем таблицу по макс рекордам сверху - CompareRecords
 }
-//cоздадим функцию для отображения таблицы - DrawRecords
-void drawRecords(HDC hdc) {
-    HFONT hFont = CreateFontA(16, 0, 0, 0, 0, 0, 0, 0, DEFAULT_CHARSET, 0, 0, 0, 0, "Courier New");
-    SelectObject(hdc, hFont);
-    SetTextColor(hdc, RGB(0, 64, 64));
-    char str1[] = "| №  | Дата       | Время    | Имя                  | Мин всего | Ходов |";
-    TextOutA(hdc, 10, 50, str1, strlen(str1));
-
-    for (int i = 0; i < numRecords; i++) {
-        char str2[100];
-        sprintf_s(str2, "| %2d | %02d.%02d.%4d | %02d:%02d:%02d | %-20s | %9d | %5d |", //%2d  - целое число длиной 2 символа, %02d - заполняет оставшиеся символы нулями %-20s - 20 символов с выравниванием по левому краю
-            i + 1, records[i].day, records[i].month, records[i].year,
-            records[i].hour, records[i].minute, records[i].second,
-            records[i].name, records[i].mineCells, records[i].steps
-        );
-        TextOutA(hdc, 10, 50 + (i + 1) * 24, str2, strlen(str2));
-    }
-}//showmode режим отображения бинарный 0 - ничего 1 - игровое поле
 
 int CompareRecords(int index1, int index2)//передаем порядковые номера рекордов вв функцию
 {
-    if (records[index1].mineCells < records[index2].mineCells)//если у первого меньше золота
+    if (records[index1].minedCells < records[index2].minedCells)//если у первого меньше золота
     {
         return -1;
     }
-    if (records[index1].mineCells > records[index2].mineCells)
+    if (records[index1].minedCells > records[index2].minedCells)
     {
         return 1;
     }
@@ -471,7 +519,7 @@ int CompareRecords(int index1, int index2)//передаем порядковы�
 void insertRecord(char name[])
 {
     strcpy_s(records[numRecords].name, name); //скопировали имя
-    records[numRecords].mineCells = mineCells;
+    records[numRecords].minedCells = minedCells;
     records[numRecords].steps = steps;
     //для хранения времени
     SYSTEMTIME st;
@@ -498,18 +546,122 @@ void insertRecord(char name[])
     }
 }
 
+//cоздадим функцию для отображения таблицы - DrawRecords
+void drawRecords(HDC hdc) {
+    HFONT hFont = CreateFontA(16, 0, 0, 0, 0, 0, 0, 0, DEFAULT_CHARSET, 0, 0, 0, 0, "Courier New");
+    SelectObject(hdc, hFont);
+    SetTextColor(hdc, RGB(0, 64, 64));
+    char str1[] = "| №  | Дата       | Время    | Имя                  | Мин всего | Ходов |";
+    TextOutA(hdc, 10, 50, str1, strlen(str1));
+
+    for (int i = 0; i < numRecords; i++) {
+        char str2[100];
+        sprintf_s(str2, "| %2d | %02d.%02d.%4d | %02d:%02d:%02d | %-20s | %9d | %5d |", //%2d  - целое число длиной 2 символа, %02d - заполняет оставшиеся символы нулями %-20s - 20 символов с выравниванием по левому краю
+            i + 1, records[i].day, records[i].month, records[i].year,
+            records[i].hour, records[i].minute, records[i].second,
+            records[i].name, records[i].minedCells, records[i].steps
+        );
+        TextOutA(hdc, 10, 50 + (i + 1) * 24, str2, strlen(str2));
+    }
+}//showmode режим отображения бинарный 0 - ничего 1 - игровое поле
+
+//функция шифрования одного символа
+int encode(char c, int key)
+{
+    int newCh = c;
+    //если переданная буква заглавная
+    if (c >= 'A' && c <= 'Z') {
+        //шифруем Цезарем
+        newCh += key;
+        if (newCh > 'Z') {
+            newCh = 'A' + (newCh - 'Z' - 1);
+        }
+    }
+    //если переданная буква маленькая
+    if (c >= 'a' && c <= 'z') {
+        //шифруем Цезарем
+        newCh += key;
+        if (newCh > 'z') {
+            newCh = 'a' + (newCh - 'z' - 1);
+        }
+    }
+    //если передана цифра
+    if (c >= '0' && c <= '9') {
+        //шифруем Цезарем
+        newCh += key;
+        if (newCh > '9') {
+            newCh = '0' + (newCh - '9' - 1);
+        }
+    }
+    return newCh; //на выходе возвращаем значение функции
+}
+
+//функция дешифрования одного символа
+int decode(char c, int key)
+{
+    int newCh = c;
+    //если переданная буква заглавная
+    if (c >= 'A' && c <= 'Z') {
+        //шифруем Цезарем
+        newCh -= key;
+        if (newCh < 'A') {
+            newCh = 'Z' - ('A' - newCh - 1);
+        }
+    }
+    //если переданная буква маленькая
+    if (c >= 'a' && c <= 'z') {
+        //шифруем Цезарем
+        newCh -= key;
+        if (newCh < 'a') {
+            newCh = 'z' - ('a' - newCh - 1);
+        }
+    }
+    //если передана цифра
+    if (c >= '0' && c <= '9') {
+        //шифруем Цезарем
+        newCh -= key;
+        if (newCh < '0') {
+            newCh = '9' - ('0' - newCh - 1);
+        }
+    }
+    return newCh; //на выходе возвращаем значение функции
+}
+
+//зашифровать всю строку циклом while по всей строке
+void EncodeString(char str[], int key) {
+    //создаем счетчик
+    int i = 0;
+    //пока не доходим до конца строки (0 - конец строки)
+    while (str[i] != 0) {
+        str[i] = encode(str[i], key);
+        //увеличиваем счетчик
+        i++;
+    }
+}
+
+//расшифровать всю строку циклом while по всей строке
+void DecodeString(char str[], int key) {
+    //создаем счетчик
+    int i = 0;
+    //пока не доходим до конца строки (0 - конец строки)
+    while (str[i] != 0) {
+        str[i] = decode(str[i], key);
+        //увеличиваем счетчик
+        i++;
+    }
+}
+
+// нужно загрузить таблицу рекордов - лаба 20 - saveRecords и loadRecords (после saveRecords, чтобы было что грузить)
+// 16/01/24 шифруем и расшифровываем
 void saveRecords() {
     FILE* f;
     fopen_s(&f, filenameRecords, "wt");
-    if (f == NULL) {
-        MessageBoxA(0, "Не удалось сохранить рекорды.", "Ошибка", MB_OK);
-        return; // проверка на успешное открытие файла
-    }
     fprintf(f, "%d", numRecords);
     for (int i = 0; i < numRecords; i++) {
-        fprintf(f, "\n%s %d %d %d %d %d %d %d %d\n",
+        char encStr[255];
+        sprintf_s(encStr, "%s\n %d %d %d %d %d %d %d %d\n",
             records[i].name,
-            records[i].mineCells,
+            records[i].minedCells,
             records[i].steps,
             records[i].year,
             records[i].month,
@@ -517,16 +669,16 @@ void saveRecords() {
             records[i].hour,
             records[i].minute,
             records[i].second);
+        EncodeString(encStr, 3);
+        fprintf(f, "%s", encStr);
     }
     fclose(f);
 }
 
+//расшифровываем
 void loadRecords() {
     FILE* f;
-    if (fopen_s(&f, filenameRecords, "rt") != 0) {
-        MessageBoxA(0, "Не удалось загрузить рекорды.", "Ошибка", MB_OK);
-        return; // проверка на успешное открытие файла
-    }
+    fopen_s(&f, filenameRecords, "rt");
     fscanf_s(f, "%d\n", &numRecords);
     for (int i = 0; i < numRecords; i++) {
         fgets(records[i].name, 80, f);
@@ -535,8 +687,14 @@ void loadRecords() {
                 records[i].name[j] = 0;
             }
         }
-        fscanf_s(f, "%d%d%d%d%d%d%d%d\n",
-            &records[i].mineCells,
+        //расшифровываем
+        DecodeString(records[i].name, 3);
+        char encStr[255];
+        fgets(encStr, 255, f);
+        DecodeString(encStr, 3);
+
+        sscanf_s(encStr, "%d%d%d%d%d%d%d%d\n",
+            &records[i].minedCells,
             &records[i].steps,
             &records[i].year,
             &records[i].month,
@@ -547,7 +705,6 @@ void loadRecords() {
     }
     fclose(f);
 }
-
 
 //
 //   ФУНКЦИЯ: InitInstance(HINSTANCE, int)
@@ -595,7 +752,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
         static HWND hEdit1;
         static HWND hAddBtn;
 
-    case WM_CREATE:
+    case WM_CREATE: {
         hInst = ((LPCREATESTRUCT)lParam)->hInstance;
         hEdit1 = CreateWindowA("edit", "Noname", WS_CHILD | WS_VISIBLE
             | WS_BORDER | ES_LEFT, 650, 50, 160, 20, hWnd, 0, hInst, NULL);
@@ -607,24 +764,41 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
         SetTimer(hWnd, 1, 100, NULL);
         loadRecords();
         break;
+    }
+
     case WM_LBUTTONDOWN: {
-        POINT pt;//получаем координаты курсора
+        /*POINT pt;//получаем координаты курсора
         GetCursorPos(&pt);
         ScreenToClient(hWnd, &pt); //преобразуем в клиентские координаты
-
         //вызываем функцию открытия ячейки
-        OpenCell(pt.x, pt.y);
-        InvalidateRect(hWnd, NULL, TRUE); //перерисовываем окно
+        OpenCell(pt.x, pt.y); //очень медленно загружается
+        */
+        //извлечение координат нажатия мыши
+        int mouseX = GET_X_LPARAM(lParam);
+        int mouseY = GET_Y_LPARAM(lParam);
+        //вызов функции OpenCell с координатами мыши
+        OpenCell(mouseX, mouseY);
+        InvalidateRect(hWnd, NULL, false); //перерисовываем окно false чтобы перерисовка осуществлялась плавно
         break;
     }
-    //case WM_RBUTTONDOWN: { // Обработка нажатия правой кнопки мыши
-    //    int mouseX = LOWORD(lParam);
-    //    int mouseY = HIWORD(lParam);
-    //    TickCell(mouseX, mouseY); // Вызов функции открытия ячейки
-    //    InvalidateRect(hWnd, NULL, TRUE); // Перерисовать окно
-    //    return 0;
-    //    break;
-    //}
+
+    case WM_RBUTTONDOWN: { // Обработка нажатия правой кнопки мыши
+        /*POINT pt;//получаем координаты курсора
+        GetCursorPos(&pt);
+        ScreenToClient(hWnd, &pt); //преобразуем в клиентские координаты
+        //вызываем функцию пометки ячейки
+        TickCell(pt.x, pt.y); //очень медленно загружается
+        */
+
+        //извлечение координат нажатия мыши
+        int mouseX = GET_X_LPARAM(lParam);
+        int mouseY = GET_Y_LPARAM(lParam);
+        //вызов функции TickCell с координатами мыши
+        TickCell(mouseX, mouseY);
+        InvalidateRect(hWnd, NULL, false); //перерисовываем окно false чтобы перерисовка осуществлялась плавно
+        break;
+    }
+
     case WM_KEYDOWN: {
                        if (wParam == 0x53) { // нажата клавиша S 
                            saveStatus();
@@ -652,6 +826,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
                        }
                        break;
     }
+
     case WM_COMMAND:
         {
         if (lParam == (LPARAM)hAddBtn)
@@ -677,6 +852,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
             }
         }
         break;
+
     case WM_PAINT:
         {
             PAINTSTRUCT ps;
@@ -685,6 +861,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
             if (showMode == 1) {
             DrawField(hdc);
             DrawCell(hdc);
+            DrawTickedCell(hdc);
             }
             else {
                 drawRecords(hdc);
@@ -693,7 +870,9 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
             EndPaint(hWnd, &ps);
         }
         break;
+
     case WM_DESTROY:
+
         saveRecords();
         PostQuitMessage(0);
         break;
