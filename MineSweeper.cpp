@@ -44,6 +44,10 @@ Record records[MAX_NUM_RECORDS + 1];
 int numRecords = 0;//считаем рекорды
 int showMode = 1;
 
+// добавляем изображения
+BITMAP bm_cell, bm_cell1, bm_cell2, bm_cell3, bm_field, bm_mine, bm_tick;
+HBITMAP hbm_cell, hbm_cell1, hbm_cell2, hbm_cell3, hbm_field, hbm_mine, hbm_tick;
+
 // Отправить объявления функций, включенных в этот модуль кода:
 ATOM                MyRegisterClass(HINSTANCE hInstance);
 BOOL                InitInstance(HINSTANCE, int);
@@ -150,6 +154,23 @@ ATOM MyRegisterClass(HINSTANCE hInstance)
 
     return RegisterClassExW(&wcex);
 }
+ // функция для отрисовки битмапа (растрового изображения) на заданном контексте устройства (HDC) в Windows
+void drawBitmap(HDC dc, BITMAP bmi, HBITMAP hbm, int x, int y, int w, int h)
+{
+    HDC cdc = CreateCompatibleDC(dc);
+    SelectObject(cdc, hbm);
+    SetStretchBltMode(dc, HALFTONE);
+    if (w == 0) {
+        w = bmi.bmWidth;
+    }
+    if (h == 0)
+    {
+        h = bmi.bmHeight;
+    }
+    StretchBlt(dc, x, y, w, h, cdc, 0, 0, bmi.bmWidth, bmi.bmHeight, SRCCOPY);//Отрисовываем ранее загруженный файл
+    //DeleteObject(hbm);
+    DeleteDC(cdc);
+}
 
 //функция-cчетчик мин
 int CountMines() {
@@ -178,7 +199,8 @@ void DrawField(HDC hdc) {
         for (int j = 0; j < M; j++) {//цикл обходит по элементам строки
             RECT rect = { j * sizeX,i * sizeY,(j + 1) * sizeX,(i + 1) * sizeY };
             Rectangle(hdc, rect.left, rect.top, rect.right, rect.bottom);
-            FillRect(hdc, &rect, hField);
+            drawBitmap(hdc, bm_field, hbm_field, j * sizeX, i * sizeY, 0, 0);
+            //FillRect(hdc, &rect, hField);
         }
     }
     //выведем на экран номер уровня, количество мин и счетчик ходов  
@@ -204,54 +226,60 @@ void DrawField(HDC hdc) {
  
  //3 создадим функию для отрисовки игровой ячейки
 void DrawCell(HDC hdc) {
-    HBRUSH hCell = CreateSolidBrush(RGB(255, 255, 255));
+    /*HBRUSH hCell = CreateSolidBrush(RGB(255, 255, 255));
     HBRUSH hMine = CreateSolidBrush(RGB(0, 0, 0));
     HFONT hFont = CreateFontA(20, 0, 0, 0, FW_BOLD, 0, 0, 0, DEFAULT_CHARSET, 0, 0, 0, 0, "Courier New");
     HPEN hPen = CreatePen(PS_SOLID, 2, RGB(100, 100, 100));
     SelectObject(hdc, hFont);
-    SelectObject(hdc, hPen);
+    SelectObject(hdc, hPen);*/
     for (int i = 0; i < N; i++) {//цикл обходит по строкам
         for (int j = 0; j < M; j++) {//цикл обходит по элементам строки
             RECT rect = { j * sizeX,i * sizeY,(j + 1) * sizeX,(i + 1) * sizeY };
             if (a[i][j] == 90) {
-                FillRect(hdc, &rect, hMine);
+                drawBitmap(hdc, bm_mine, hbm_mine, j * sizeX, i * sizeY, 0, 0);
+                //FillRect(hdc, &rect, hMine);
             }
             else {
                 if (a[i][j] == 100) {
-                    FillRect(hdc, &rect, hCell);
-                    Rectangle(hdc, rect.left, rect.top, rect.right, rect.bottom);
+                    drawBitmap(hdc, bm_cell, hbm_cell, j * sizeX, i * sizeY, 0, 0);
+                    //FillRect(hdc, &rect, hCell);
+                    //Rectangle(hdc, rect.left, rect.top, rect.right, rect.bottom);
                 }            
                 if (a[i][j] == 10) {   
-                    FillRect(hdc, &rect, hCell);
-                    Rectangle(hdc, rect.left, rect.top, rect.right, rect.bottom);
+                    drawBitmap(hdc, bm_cell1, hbm_cell1, j * sizeX, i * sizeY, 0, 0);
+                    //FillRect(hdc, &rect, hCell);
+                    /*Rectangle(hdc, rect.left, rect.top, rect.right, rect.bottom);
                     SetTextColor(hdc, RGB(0, 0, 0));
-                    DrawText(hdc, L"1", -1, &rect, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+                    DrawText(hdc, L"1", -1, &rect, DT_CENTER | DT_VCENTER | DT_SINGLELINE);*/
                               }
                 else if (a[i][j] == 20) { 
-                    FillRect(hdc, &rect, hCell);
-                    Rectangle(hdc, rect.left, rect.top, rect.right, rect.bottom);
+                    drawBitmap(hdc, bm_cell2, hbm_cell2, j * sizeX, i * sizeY, 0, 0);
+                    //FillRect(hdc, &rect, hCell);
+                    /*Rectangle(hdc, rect.left, rect.top, rect.right, rect.bottom);
                     SetTextColor(hdc, RGB(255, 255, 0));
-                    DrawText(hdc, L"2", -1, &rect, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+                    DrawText(hdc, L"2", -1, &rect, DT_CENTER | DT_VCENTER | DT_SINGLELINE);*/
                 }
                 else if (a[i][j] == 30) {
-                    FillRect(hdc, &rect, hCell);
-                    Rectangle(hdc, rect.left, rect.top, rect.right, rect.bottom);
+                    drawBitmap(hdc, bm_cell3, hbm_cell3, j * sizeX, i * sizeY, 0, 0);
+                    //FillRect(hdc, &rect, hCell);
+                    /*Rectangle(hdc, rect.left, rect.top, rect.right, rect.bottom);
                     SetTextColor(hdc, RGB(255, 0, 0));
-                    DrawText(hdc, L"3", -1, &rect, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+                    DrawText(hdc, L"3", -1, &rect, DT_CENTER | DT_VCENTER | DT_SINGLELINE);*/
                 }
                 else if (a[i][j] == 900) {
-                    FillRect(hdc, &rect, hCell);
-                    Rectangle(hdc, rect.left, rect.top, rect.right, rect.bottom);
+                    drawBitmap(hdc, bm_tick, hbm_tick, j * sizeX, i * sizeY, 0, 0);
+                    //FillRect(hdc, &rect, hCell);
+                    /*Rectangle(hdc, rect.left, rect.top, rect.right, rect.bottom);
                     SetTextColor(hdc, RGB(255, 0, 0));
-                    DrawText(hdc, L"*", -1, &rect, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+                    DrawText(hdc, L"*", -1, &rect, DT_CENTER | DT_VCENTER | DT_SINGLELINE);*/
                 }
             }
         }
     }
-    DeleteObject(hCell);
+    /*DeleteObject(hCell);
     DeleteObject(hMine);
     DeleteObject(hFont);
-    DeleteObject(hPen);
+    DeleteObject(hPen);*/
 }//вызвать функцию DrawCell(hdc); в WM_PAINT
 
 //функция для проверки победы
@@ -377,25 +405,26 @@ void TickCell(int mouseX, int mouseY) {
 }//вызвать функцию TickCell(hdc); в WM_RBUTTONDOWN
 
 void DrawTickedCell(HDC hdc) {
-    HBRUSH hTick = CreateSolidBrush(RGB(255, 0, 0));
+    /*HBRUSH hTick = CreateSolidBrush(RGB(255, 0, 0));
     HFONT hFont = CreateFontA(20, 0, 0, 0, FW_BOLD, 0, 0, 0, DEFAULT_CHARSET, 0, 0, 0, 0, "Courier New");
     HPEN hPen = CreatePen(PS_SOLID, 2, RGB(100, 100, 100));
     SelectObject(hdc, hFont);
-    SelectObject(hdc, hPen);
+    SelectObject(hdc, hPen);*/
     for (int i = 0; i < N; i++) {//цикл обходит по строкам
         for (int j = 0; j < M; j++) {//цикл обходит по элементам строки
             RECT rect = { j * sizeX,i * sizeY,(j + 1) * sizeX,(i + 1) * sizeY };
             if (a[i][j] == 900) {
-                FillRect(hdc, &rect, hTick);
-                Rectangle(hdc, rect.left, rect.top, rect.right, rect.bottom);
+                drawBitmap(hdc, bm_tick, hbm_tick, j * sizeX, i * sizeY, 0, 0);
+                //FillRect(hdc, &rect, hTick);
+                /*Rectangle(hdc, rect.left, rect.top, rect.right, rect.bottom);
                 SetTextColor(hdc, RGB(255, 0, 0));
-                DrawText(hdc, L"*", -1, &rect, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+                DrawText(hdc, L"*", -1, &rect, DT_CENTER | DT_VCENTER | DT_SINGLELINE);*/
             }
         }
     }
-    DeleteObject(hTick);
+    /*DeleteObject(hTick);
     DeleteObject(hFont);
-    DeleteObject(hPen);
+    DeleteObject(hPen);*/
 }//вызвать функцию DrawTickedCell(hdc); в WM_PAINT
 
 void loadStatus()
@@ -753,6 +782,21 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
         static HWND hAddBtn;
 
     case WM_CREATE: {
+        hbm_cell = (HBITMAP)LoadImageA(0, "C:\\Temp\\Cell.bmp", IMAGE_BITMAP, 0, 0, LR_LOADFROMFILE);//Загружаем файл
+        hbm_cell1 = (HBITMAP)LoadImageA(0, "C:\\Temp\\Cell1.bmp", IMAGE_BITMAP, 0, 0, LR_LOADFROMFILE);//Загружаем файл
+        hbm_cell2 = (HBITMAP)LoadImageA(0, "C:\\Temp\\Cell2.bmp", IMAGE_BITMAP, 0, 0, LR_LOADFROMFILE);//Загружаем файл
+        hbm_cell3 = (HBITMAP)LoadImageA(0, "C:\\Temp\\Cell3.bmp", IMAGE_BITMAP, 0, 0, LR_LOADFROMFILE);//Загружаем файл
+        hbm_field = (HBITMAP)LoadImageA(0, "C:\\Temp\\Field.bmp", IMAGE_BITMAP, 0, 0, LR_LOADFROMFILE);//Загружаем файл
+        hbm_mine = (HBITMAP)LoadImageA(0, "C:\\Temp\\Mine.bmp", IMAGE_BITMAP, 0, 0, LR_LOADFROMFILE);//Загружаем файл
+        hbm_tick = (HBITMAP)LoadImageA(0, "C:\\Temp\\Tick.bmp", IMAGE_BITMAP, 0, 0, LR_LOADFROMFILE);//Загружаем файл
+        GetObject(hbm_cell, sizeof(BITMAP), &bm_cell);
+        GetObject(hbm_cell1, sizeof(BITMAP), &bm_cell1);
+        GetObject(hbm_cell2, sizeof(BITMAP), &bm_cell2);
+        GetObject(hbm_cell3, sizeof(BITMAP), &bm_cell3);
+        GetObject(hbm_field, sizeof(BITMAP), &bm_field);
+        GetObject(hbm_mine, sizeof(BITMAP), &bm_mine);
+        GetObject(hbm_tick, sizeof(BITMAP), &bm_tick);
+
         hInst = ((LPCREATESTRUCT)lParam)->hInstance;
         hEdit1 = CreateWindowA("edit", "Noname", WS_CHILD | WS_VISIBLE
             | WS_BORDER | ES_LEFT, 650, 50, 160, 20, hWnd, 0, hInst, NULL);
