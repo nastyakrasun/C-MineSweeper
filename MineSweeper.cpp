@@ -167,7 +167,7 @@ void drawBitmap(HDC dc, BITMAP bmi, HBITMAP hbm, int x, int y, int w, int h)
     {
         h = bmi.bmHeight;
     }
-    StretchBlt(dc, x, y, w, h, cdc, 0, 0, bmi.bmWidth, bmi.bmHeight, SRCCOPY);//Отрисовываем ранее загруженный файл
+    StretchBlt(dc, x, y, w, h, cdc, 0, 0, bmi.bmWidth, bmi.bmHeight, SRCCOPY); //Отрисовываем ранее загруженный файл
     //DeleteObject(hbm);
     DeleteDC(cdc);
 }
@@ -177,7 +177,7 @@ int CountMines() {
     int minedCells = 0;
     for (int i = 0; i < N; i++) {
         for (int j = 0; j < M; j++) {
-            if (a[i][j] == 9) { //ячейка содержит мину
+            if (a[i][j] == 9 || a[i][j] == 90) { //ячейка содержит мину
                 minedCells++;
             }
         }
@@ -567,8 +567,8 @@ void insertRecord(char name[])
             Record temp = records[i];
             records[i] = records[i - 1];
             records[i - 1] = temp;
-            i--;
         }
+            i--;
     }
     if (numRecords < MAX_NUM_RECORDS) {
         numRecords++;
@@ -592,6 +592,7 @@ void drawRecords(HDC hdc) {
         );
         TextOutA(hdc, 10, 50 + (i + 1) * 24, str2, strlen(str2));
     }
+    DeleteObject(hFont);
 }//showmode режим отображения бинарный 0 - ничего 1 - игровое поле
 
 //функция шифрования одного символа
